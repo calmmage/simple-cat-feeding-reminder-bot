@@ -7,15 +7,32 @@
 
 
 # version 0: dummy-dummy-dummy
-- user clicks /start command
-- we send user the reminders from there on
+- [x] user clicks /start command
+- [x] we send user the reminders from there on
 
 # version 1: slightly better
-- extend the user setup flow to 
+- [x] extend the user setup flow to ask the user when the reminders should be
+- [x] extend the reminder functionality to actually wait for user response!
+- [ ] Send a sample reminder right away!
+- [ ] Find some easy way to specify and support time zones
+
+Next steps
+- [ ] reset_reminders command
+- [ ] 'cancel' button for the schedule setup flow
+- [ ] setup timezone
+  - [ ] location
+  - [ ] string
+  - [ ] current time
+- [ ] add a basic chat handler: 
+
+Feature 2: Specify a partner
+- find a simple way to specify a partner
+
 
 # version 2: use the database
-- users in the database
-- save schedule in the database
+- [ ] users in the database
+- [ ] save schedule in the database
+- [ ] save ... log + photos in the database
 
 # version 3: add support for other people responsible for feeding the cat
 
