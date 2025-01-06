@@ -2,13 +2,14 @@
 Stats commands for the cat feeding bot
 """
 
+import os
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
-from botspot.components.bot_commands_menu import add_command
+from botspot.components.bot_commands_menu import Visibility, add_command
 from botspot.utils import reply_safe
 
 from src.database import DatabaseManager
@@ -107,3 +108,32 @@ async def show_full_stats(message: Message) -> None:
             stats_text += f"Times: {', '.join(user_schedule['times'])}\n"
 
     await reply_safe(message, stats_text)
+
+
+@add_command("help", "Show available commands")
+@router.message(Command("help"))
+async def help_command(message: Message) -> None:
+    """Show help message with available commands"""
+    from botspot.components.bot_commands_menu import commands
+
+    # Main commands section
+    text = "🐱 <b>Cat Feeding Bot Commands</b>\n\n"
+    text += "<b>Main Commands:</b>\n"
+    for cmd, info in commands.items():
+        if info.visibility == Visibility.PUBLIC:
+            text += f"/{cmd} - {info.description}\n"
+
+    assert message.from_user is not None
+
+    # Add hidden commands section for admin
+    # Get bot info to check if user is owner
+    text += "\n<b>Hidden Commands:</b>\n"
+    for cmd, info in commands.items():
+        if info.visibility == Visibility.HIDDEN:
+            text += f"/{cmd} - {info.description}\n"
+
+        if message.from_user.id == int(os.getenv("ADMIN_USER_ID", 0)):
+            if info.visibility == Visibility.ADMIN_ONLY:
+                text += f"/{cmd} - {info.description}\n"
+
+    await reply_safe(message, text)

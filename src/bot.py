@@ -7,11 +7,15 @@ from botspot.core.bot_manager import BotManager
 from dotenv import load_dotenv
 
 from src.routers.admin import router as admin_router
+from src.routers.chat import router as chat_router
 from src.routers.dev import router as dev_router
-from src.routers.main import router as main_router
+from src.routers.feeding import router as feeding_router
+from src.routers.info import router as info_router
+from src.routers.schedule import router as schedule_router
+from src.routers.settings import router as settings_router
+from src.routers.start import router as start_router
 
 # from src.routers.partners import router as partners_router
-from src.routers.stats import router as stats_router
 
 load_dotenv()
 TOKEN = getenv("TELEGRAM_BOT_TOKEN")
@@ -22,8 +26,12 @@ dp = Dispatcher()
 dp.include_router(dev_router)
 dp.include_router(admin_router)
 # dp.include_router(partners_router)
-dp.include_router(stats_router)
-dp.include_router(main_router)
+dp.include_router(info_router)
+dp.include_router(feeding_router)
+dp.include_router(schedule_router)
+dp.include_router(settings_router)
+dp.include_router(start_router)
+dp.include_router(chat_router)
 
 
 async def main() -> None:
