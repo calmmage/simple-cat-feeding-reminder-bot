@@ -1,20 +1,19 @@
 import json
 import random
-from datetime import datetime, timedelta
-
 from aiogram import Router, html
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
+from datetime import datetime, timedelta
+from src.utils import create_state, repo_root
+
 from botspot.components import ask_user
 from botspot.components.ask_user_handler import ask_user_choice
 from botspot.components.bot_commands_menu import add_command
 from botspot.utils import reply_safe, send_safe
-from botspot.utils.deps_getters import get_database, get_scheduler
-from src.utils import create_state, repo_root
+from botspot.utils.deps_getters import get_scheduler
 
 router = Router()
-# Get database connection at module level
 
 # plan: dev/todo.md
 
@@ -26,15 +25,6 @@ SCHEDULES = {
 }
 
 
-# @add_command("help", "Show help")
-# @router.message(Command("help"))
-# async def command_help_handler(message: Message) -> None:
-#     """Send a help message when the command /help is issued"""
-#     await reply_safe(
-#         message,
-#         "This is a cat feeding reminder bot. "
-#         f"Use /help to see available commands."
-#     )
 @add_command("start", "Start the bot")
 @router.message(CommandStart())
 async def command_start_handler(message: Message, state: FSMContext) -> None:
@@ -53,10 +43,6 @@ async def command_start_handler(message: Message, state: FSMContext) -> None:
 @router.message(Command("setup"))
 async def setup_schedule(message: Message, state: FSMContext) -> None:
     """Setup feeding schedule"""
-    # if not message.from_user:
-    #     await reply_safe(message, "Error: Could not identify user.")
-    #     return
-
     choice = await ask_user_choice(
         message.chat.id, "Pick a schedule", list(SCHEDULES.keys()) + ["Cancel"], state, timeout=None
     )
@@ -87,14 +73,21 @@ async def setup_schedule(message: Message, state: FSMContext) -> None:
             minute=minute,
             id=f"feed_{message.from_user.id}_{time}",
             args=[message.chat.id],
+            # kwargs={"reschedule_if_missed": True}  # Regular reminders should reschedule
         )
 
     await reply_safe(
         message, f"Scheduled to feed your cat {choice} times per day:\n" f"{', '.join(schedule)}"
     )
 
+    # Send a test reminder right away
+    await reply_safe(message, "Here's how the reminders will look:")
+    await send_reminder(
+        message.chat.id, reschedule_if_missed=False
+    )  # Test reminder shouldn't reschedule
 
-async def send_reminder(chat_id: int) -> None:
+
+async def send_reminder(chat_id: int, reschedule_if_missed: bool = True) -> None:
     """Send feeding reminder"""
     # todo: cancel if recently fed (And notify the user)
     # todo: provide both 'ask user' and 'choice' here (button to click + respond by message)
@@ -125,13 +118,15 @@ async def send_reminder(chat_id: int) -> None:
         await register_meal(response)
     else:
         # notify user of the time out
-        await send_safe(chat_id, "Time's up! Will remind again in 1 hour.")
-        register_reminder(chat_id, datetime.now() + timedelta(hours=1))
-        pass
-        # step 3: if no (timeout) -> remind in 1 hour?
+        # todo: fix the message as well
+        reply_text = "Time's up!"
+        if reschedule_if_missed:
+            reply_text += " Will remind again in 1 hour."
+            register_reminder(chat_id, datetime.now() + timedelta(hours=1))
+
+        await send_safe(chat_id, reply_text)
 
 
-# todo: def register_fed
 async def register_meal(message: Message) -> None:
 
     # step 2: if yes -> congratulate with random response from responses.json
@@ -139,7 +134,7 @@ async def register_meal(message: Message) -> None:
     # Todo: add a button or command. Command should be /fed. good for now
     # todo: ask for a photo or video if missing
 
-    responses_path = repo_root / "src" / "responses.json"
+    responses_path = repo_root / "src" / "resources" / "responses.json"
     with open(responses_path, encoding="utf-8") as file:
         responses = json.load(file)
 
@@ -160,46 +155,22 @@ async def register_meal(message: Message) -> None:
     # todo: send the photo to other responsible people
 
 
-def register_reminder(user_id, timestamp) -> None:
-    pass
+def register_reminder(chat_id: int, timestamp: datetime) -> None:
+    """Schedule a follow-up reminder"""
+    scheduler = get_scheduler()
 
+    # Create a unique job ID for this follow-up reminder
+    job_id = f"followup_{chat_id}_{timestamp.strftime('%Y%m%d_%H%M')}"
 
-@add_command("dbwrite", "Write test feeding record", hidden=True)
-@router.message(Command("dbwrite"))
-async def db_write(message: Message) -> None:
-    """Write test feeding record to database"""
-    db = get_database()
-    await db.feedings.insert_one(
-        {
-            "user_id": message.from_user.id,
-            "timestamp": datetime.now(),
-            "schedule_type": "test",
-            "photo_id": None,
-        }
+    # Add one-time job for the follow-up reminder
+    scheduler.add_job(
+        send_reminder,
+        "date",  # Run once at specific time
+        run_date=timestamp,
+        id=job_id,
+        args=[chat_id],
+        kwargs={"reschedule_if_missed": True},  # Allow rescheduling for follow-ups
     )
-    await reply_safe(message, "Test feeding record written to database!")
-
-
-@add_command("dbread", "Read feeding records", hidden=True)
-@router.message(Command("dbread"))
-async def db_read(message: Message) -> None:
-    """Read feeding records from database"""
-    db = get_database()
-    cursor = db.feedings.find({"user_id": message.from_user.id})
-    items = await cursor.to_list(length=100)
-    if not items:
-        await reply_safe(message, "No feeding records found!")
-        return
-
-    text = "Your feeding records:\n\n"
-    for item in items:
-        text += f"Time: {item['timestamp'].strftime('%Y-%m-%d %H:%M')}\n"
-        text += f"Schedule: {item['schedule_type']}\n"
-        if item.get("photo_id"):
-            text += "📸 With photo\n"
-        text += "\n"
-
-    await reply_safe(message, text)
 
 
 @add_command("help", "Show available commands")

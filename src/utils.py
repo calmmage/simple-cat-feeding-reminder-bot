@@ -1,7 +1,6 @@
-from pathlib import Path
-
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
+from pathlib import Path
 
 # from aiogram.fsm.storage.redis import RedisStorage  # Optional, if using Redis
 
@@ -11,10 +10,11 @@ repo_root = Path(__file__).parent.parent
 def create_state(chat_id: int) -> FSMContext:
 
     # Get the bot instance and storage from your dependencies
-    from botspot.utils.deps_getters import get_bot  # Add this import if needed
+    from botspot.utils.deps_getters import get_bot, get_dispatcher  # Add this import if needed
 
+    dp = get_dispatcher()
     bot = get_bot()
-    storage = bot.storage  # Get storage from your bot instance
+    storage = dp.storage
 
     # Create state context for the specific chat
     state = FSMContext(
