@@ -1,0 +1,54 @@
+services:
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+  mongo-express:
+    image: mongo-express
+    ports:
+      - "${MONGO_EXPRESS_PORT}:8081"
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongodb
+      - ME_CONFIG_MONGODB_PORT=27017
+      - ME_CONFIG_MONGODB_ENABLE_ADMIN=true
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=${MONGO_EXPRESS_PASSWORD}
+    depends_on:
+      - mongodb
+
+  api:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    # ports:
+    #   - "${API_PORT}:8000"
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - ADMIN_USER_ID=${ADMIN_USER_ID}
+      - BOTSPOT_PRINT_BOT_URL_ENABLED=${BOTSPOT_PRINT_BOT_URL_ENABLED}
+      - BOTSPOT_ERROR_HANDLER_ENABLED=${BOTSPOT_ERROR_HANDLER_ENABLED}
+      - BOTSPOT_BOT_COMMANDS_MENU_ENABLED=${BOTSPOT_BOT_COMMANDS_MENU_ENABLED}
+      - BOTSPOT_ASK_USER_ENABLED=${BOTSPOT_ASK_USER_ENABLED}
+      - BOTSPOT_TRIAL_MODE_ENABLED=${BOTSPOT_TRIAL_MODE_ENABLED}
+      - BOTSPOT_ERROR_HANDLER_DEVELOPER_CHAT_ID=${BOTSPOT_ERROR_HANDLER_DEVELOPER_CHAT_ID}
+      - BOTSPOT_ERROR_HANDLER_EASTER_EGGS=${BOTSPOT_ERROR_HANDLER_EASTER_EGGS}
+      - BOTSPOT_SCHEDULER_ENABLED=${BOTSPOT_SCHEDULER_ENABLED}
+      - BOTSPOT_SCHEDULER_TIMEZONE=${BOTSPOT_SCHEDULER_TIMEZONE}
+      - BOTSPOT_MONGO_DATABASE_ENABLED=${BOTSPOT_MONGO_DATABASE_ENABLED}
+      - BOTSPOT_MONGO_DATABASE_CONN_STR=${BOTSPOT_MONGO_DATABASE_CONN_STR}
+      - BOTSPOT_MONGO_DATABASE_DATABASE=${BOTSPOT_MONGO_DATABASE_DATABASE}
+    depends_on:
+      mongodb:
+        condition: service_started
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3
+    #   start_period: 10s
+
+volumes:
+  mongodb_data: 
