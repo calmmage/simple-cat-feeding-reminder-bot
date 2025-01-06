@@ -1,6 +1,17 @@
+import re
+import sys
+from datetime import datetime, timedelta
+from distutils.util import strtobool
+from functools import lru_cache
+from os import getenv
+from pathlib import Path
+from typing import Optional, Tuple
+from zoneinfo import ZoneInfo
+
+import requests
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
-from pathlib import Path
+from loguru import logger
 
 # from aiogram.fsm.storage.redis import RedisStorage  # Optional, if using Redis
 
@@ -26,3 +37,13 @@ def create_state(chat_id: int) -> FSMContext:
         ),
     )
     return state
+
+
+def setup_logger(logger, level: str = "INFO"):
+    logger.remove()  # Remove default handler
+    logger.add(
+        sink=sys.stderr,
+        format="<level>{time:HH:mm:ss}</level> | <level>{message}</level>",
+        colorize=True,
+        level=level,
+    )

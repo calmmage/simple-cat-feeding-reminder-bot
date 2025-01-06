@@ -5,10 +5,12 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from botspot.core.bot_manager import BotManager
 from dotenv import load_dotenv
+from loguru import logger
 
 from src.routers.admin import router as admin_router
 from src.routers.dev import router as dev_router
 from src.routers.main import router as main_router
+from src.utils.timezone_utils import get_server_timezone
 
 load_dotenv()
 TOKEN = getenv("TELEGRAM_BOT_TOKEN")
@@ -22,6 +24,10 @@ dp.include_router(admin_router)
 
 
 async def main() -> None:
+    # Log server timezone on startup
+    server_tz = get_server_timezone()
+    logger.info(f"Server timezone detected as: {server_tz}")
+
     # Initialize Bot instance with a default parse mode
     bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 

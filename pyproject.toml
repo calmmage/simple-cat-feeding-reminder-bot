@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "simple-cat-feeding-reminder-bot"
-version = "0.1.4"
+version = "0.1.5"
 description = ""
 authors = ["Petr Lavrov <calmmage@gmail.com>"]
 readme = "README.md"
@@ -19,6 +19,7 @@ toml = ">=0.10"
 python-dotenv = "*"
 apscheduler = "^3.11.0"
 motor = "^3.6.0"
+requests = "^2.31.0"
 
 [tool.poetry.group.extras.dependencies]
 # dependencies for extra features

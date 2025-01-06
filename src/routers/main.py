@@ -3,18 +3,26 @@ import os
 import random
 from datetime import datetime, timedelta
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from aiogram import Router, html
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
-from botspot.components.ask_user_handler import ask_user_choice, ask_user_raw
+from botspot.components.ask_user_handler import ask_user, ask_user_choice, ask_user_raw
 from botspot.components.bot_commands_menu import Visibility, add_command
 from botspot.utils import answer_safe, reply_safe, send_safe
 from botspot.utils.deps_getters import get_scheduler
+from loguru import logger
 
 from src.database import DatabaseManager
 from src.utils import create_state, repo_root
+from src.utils.timezone_utils import (
+    get_true_utc_time,
+    get_user_local_time,
+    get_utc_time,
+    parse_timezone_offset,
+)
 
 router = Router()
 
@@ -47,10 +55,14 @@ async def command_start_handler(message: Message, state: FSMContext) -> None:
         "Use /help to see available commands.",
     )
 
-    # If new user (no timezone set), we might want to ask for timezone
+    # If new user (no timezone set), ask for timezone
     if not user.get("timezone"):
-        # TODO: Add timezone setup flow here
-        pass
+        await reply_safe(
+            message,
+            "I notice you haven't set your timezone yet. "
+            "This is important for scheduling reminders correctly.",
+        )
+        await setup_timezone(message)
 
     await setup_schedule(message, state)
 
@@ -63,9 +75,6 @@ async def setup_schedule(message: Message, state: FSMContext) -> None:
         message.chat.id, "Pick a schedule", list(SCHEDULES.keys()) + ["Cancel"], state, timeout=None
     )
 
-    # if not choice or choice == "Cancel":
-    #     await reply_safe(message, "Setup cancelled.")
-    #     return
     if choice is None or choice == "Cancel":
         return
 
@@ -74,11 +83,14 @@ async def setup_schedule(message: Message, state: FSMContext) -> None:
         return
 
     schedule = SCHEDULES[choice]
-
     assert message.from_user is not None
 
     # Save schedule to database
     await db_manager.save_user_schedule(message.from_user.id, choice, schedule)
+
+    # Get user's timezone
+    user = await db_manager.get_user(message.from_user.id)
+    timezone = user.get("timezone") if user else None
 
     # Clear existing jobs
     clear_user_schedule(message.chat.id)
@@ -86,14 +98,45 @@ async def setup_schedule(message: Message, state: FSMContext) -> None:
     # Add new jobs
     for time in schedule:
         hour, minute = map(int, time.split(":"))
-        schedule_reminder(message.chat.id, hour=hour, minute=minute, reschedule_if_missed=True)
 
-    # await answer_safe(
-    #     message, f"Scheduled to feed your cat {choice} times per day:\n" f"{', '.join(schedule)}"
-    # )
+        # Convert local time to UTC for scheduling if timezone is set
+        if timezone:
+            local_time = datetime.now().replace(hour=hour, minute=minute, second=0, microsecond=0)
+            utc_time = get_utc_time(local_time, timezone)
+            hour, minute = utc_time.hour, utc_time.minute
+
+        schedule_reminder(
+            chat_id=message.chat.id,
+            hour=hour,
+            minute=minute,
+            reschedule_if_missed=True,
+            timezone=timezone,
+        )
+
+    # Show schedule in user's timezone
+    if timezone:
+        schedule_times = []
+        for time in schedule:
+            h, m = map(int, time.split(":"))
+            local_time = datetime.now().replace(hour=h, minute=m)
+            utc_time = get_utc_time(local_time, timezone)
+            schedule_times.append(utc_time.strftime("%H:%M"))
+
+        await reply_safe(
+            message,
+            f"Scheduled to feed your cat {choice} times per day (in your timezone {timezone}):\n"
+            f"{', '.join(schedule_times)}",
+        )
+    else:
+        await reply_safe(
+            message,
+            f"Scheduled to feed your cat {choice} times per day:\n"
+            f"{', '.join(schedule)}\n\n"
+            "Note: Times are in UTC. Use /timezone to set your timezone.",
+        )
 
     # Send a test reminder right away
-    await answer_safe(message, "Here's how the reminders will look:")
+    await reply_safe(message, "Here's how the reminders will look:")
     await send_reminder(message.chat.id, reschedule_if_missed=False, log_reminder=False)
 
 
@@ -112,11 +155,15 @@ def schedule_reminder(
     hour: Optional[int] = None,
     minute: Optional[int] = None,
     reschedule_if_missed: bool = True,
+    timezone: Optional[str] = None,
 ) -> None:
     """Schedule a reminder - either one-time or recurring"""
     scheduler = get_scheduler()
 
     if timestamp is not None:  # One-time reminder
+        if timezone:
+            timestamp = get_utc_time(timestamp, timezone)
+
         job_id = f"followup_{chat_id}_{timestamp.strftime('%Y%m%d_%H%M')}"
         scheduler.add_job(
             send_reminder,
@@ -249,3 +296,71 @@ async def help_command(message: Message) -> None:
                 text += f"/{cmd} - {info.description}\n"
 
     await reply_safe(message, text)
+
+
+@add_command("timezone", "Set your timezone")
+@router.message(Command("timezone"))
+async def timezone_setup(message: Message, state: FSMContext) -> None:
+    """Setup user timezone"""
+    await setup_timezone(message)
+
+
+async def setup_timezone(message: Message) -> None:
+    """Ask user for timezone and save it"""
+    state = create_state(message.chat.id)
+
+    while True:
+        response = await ask_user(
+            chat_id=message.chat.id,
+            question=(
+                "Please enter your timezone in GMT±HH:MM format\n"
+                "Examples: GMT+3, GMT+03:00, GMT-5:30\n"
+                "Type 'cancel' to cancel"
+            ),
+            state=state,
+            timeout=300.0,
+        )
+
+        if not response or response.lower() == "cancel":
+            await reply_safe(message, "Timezone setup cancelled.")
+            return
+
+        timezone_str = response.strip()
+        timezone_offset = parse_timezone_offset(timezone_str)
+
+        if timezone_offset is None:
+            await reply_safe(
+                message,
+                "Invalid timezone format. Please use GMT±HH:MM format.\n"
+                "Examples: GMT+3, GMT+03:00, GMT-5:30",
+            )
+            continue
+
+        hours, minutes = timezone_offset
+        formatted_timezone = f"GMT{'+' if hours >= 0 else ''}{hours:02d}:{abs(minutes):02d}"
+
+        # Save to database
+        assert message.from_user is not None
+        await db_manager.update_user_timezone(message.from_user.id, formatted_timezone)
+
+        # Get current time in user's timezone
+        true_utc = get_true_utc_time()
+        user_time = get_user_local_time(formatted_timezone, base_time=true_utc)
+        system_utc = datetime.now(ZoneInfo("UTC"))
+
+        logger.debug(
+            "Timezone setup:\n"
+            f"True UTC time: {true_utc}\n"
+            f"System UTC time: {system_utc}\n"
+            f"System offset: {true_utc - system_utc}\n"
+            f"User timezone: {formatted_timezone}\n"
+            f"Calculated user time: {user_time}\n"
+            f"Offset from UTC: {hours:+d}:{abs(minutes):02d}"
+        )
+
+        await reply_safe(
+            message,
+            f"Timezone set to {formatted_timezone}\n"
+            f"Your current time should be around {user_time.strftime('%H:%M')}",
+        )
+        return
