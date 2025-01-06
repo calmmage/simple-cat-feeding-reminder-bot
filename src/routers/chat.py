@@ -25,10 +25,9 @@ async def handle_messages(message: Message) -> None:
     # if message.chat.type == "private":
     # fallback 1: if message text looks like timezone - setup timezone using it
     if message.text and "gmt" in message.text.lower():
-        await setup_timezone(message, message.text)
-        return
+        return await setup_timezone(message, message.text)
 
-    await reply_safe(
+    return await reply_safe(
         message,
         "This bot doesn't support casual chatting!\n\n"
         "Available commands:\n"
@@ -36,7 +35,7 @@ async def handle_messages(message: Message) -> None:
         "/setup - Setup feeding schedule\n"
         "/timezone - Set your timezone\n"
         "/fed - Register a feeding\n"
-        "/stats - Show stats"
-        "/full_stats - Show full stats"
+        "/stats - Show stats\n"
+        "/full_stats - Show full stats\n"
         "/help - Show all commands",
     )

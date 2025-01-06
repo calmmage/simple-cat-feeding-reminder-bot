@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 
 from aiogram import Router
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from botspot.components.ask_user_handler import ask_user_raw
 from botspot.components.bot_commands_menu import add_command
@@ -78,7 +79,7 @@ async def send_reminder(
 
 @add_command("fed", "Register a feeding")
 @router.message(Command("fed"))
-async def register_meal(message: Message, log_reminder: bool = True) -> None:
+async def register_meal(message: Message, state: FSMContext, log_reminder: bool = True) -> None:
     """Register a feeding"""
     # Get user's current schedule
     assert message.from_user is not None
@@ -95,15 +96,31 @@ async def register_meal(message: Message, log_reminder: bool = True) -> None:
 
     reply_text = random.choice(responses["feed_success"])
 
-    if not (message.photo or message.video):
-        reply_text += "\nNo photo though? :("
-        # todo: request, not just ask
+    photo_id = None
+    video_id = None
+    if message.photo:
+        photo_id = message.photo[-1].file_id
+        reply_text += "\nWow, you added a photo! "
+    elif message.video:
+        video_id = message.video.file_id if message.video else None
+        reply_text += "\nWow, you added a VIIDEEO!!!"
+    else:
+        new_message = await ask_user_raw(message.chat.id, "No photo though? :(", state=state)
+        if new_message is not None:
+            if new_message.photo:
+                photo_id = new_message.photo[-1].file_id
+                reply_text += "\nNice pic!"
+            if new_message.video:
+                video_id = new_message.video.file_id
+                reply_text += "\nNice vid!"
+        else:
+            reply_text = "Just text then... Anyways, " + reply_text.lower()
+
+    # todo: record the timestamp - ask user if there's custom time
 
     # Log the feeding - save timestamp
-    photo_id = message.photo[-1].file_id if message.photo else None
-    video_id = message.video.file_id if message.video else None
     if log_reminder:
-        feeding = await db_manager.log_feeding(
+        await db_manager.log_feeding(
             user_id=message.from_user.id,
             schedule_type=schedule_type,
             photo_id=photo_id,

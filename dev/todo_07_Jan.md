@@ -1,16 +1,26 @@
-- [ ] add num_retries to the ... 
+- [x] ask for a picture and recognize it!
+
+- [ ] reload schedules from db on bot restart 
+- [ ] add num_retries to the ... reminders
+
+- [ ] add new settings menu to config stuff
+  - [ ] num retries
+  - [ ] time between retries
 - [ ] record feeding time - structured output to parse from the bot
-- [ ] analyze 'yes' or 'no'
+- [ ] analyze 'yes' or 'no' in the response to the reminder
   - if yes -> record
   - if no -> ... ? retry, ... 
 - [x] if in chat message "GMT+..." regexp -> ... treat as timezone setter
 - [x] /stop command
 - [ ] bugfix issue when incorrect response to /start / /setup command
-- [ ] if /command ... -> ... always react correctly? Need to check my implementation of ask_user...  
-- - [ ] well, add partner
+- [ ] if /command -> always react correctly? Need to check my implementation of ask_user... (capture state)
+
+- [ ] well, add partner feature
+
+- [x] bugfix chat message formatting
 
 
-2. Move handlers to appropriate files:
+1. Move handlers to appropriate files:
 - [x] start.py:
   - [x] command_start_handler
 - [x] schedule.py:
