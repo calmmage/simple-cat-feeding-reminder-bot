@@ -56,25 +56,14 @@ async def setup_schedule(message: Message, state: FSMContext) -> None:
         return
 
     schedule = SCHEDULES[choice]
-    scheduler = get_scheduler()
 
-    # Clear existing jobs for this user
-    for job in scheduler.get_jobs():
-        if job.id.startswith(f"feed_{message.from_user.id}"):
-            scheduler.remove_job(job.id)
+    # Clear existing jobs
+    clear_user_schedule(message.chat.id)
 
     # Add new jobs
     for time in schedule:
         hour, minute = map(int, time.split(":"))
-        scheduler.add_job(
-            send_reminder,
-            "cron",
-            hour=hour,
-            minute=minute,
-            id=f"feed_{message.from_user.id}_{time}",
-            args=[message.chat.id],
-            # kwargs={"reschedule_if_missed": True}  # Regular reminders should reschedule
-        )
+        schedule_reminder(message.chat.id, hour=hour, minute=minute, reschedule_if_missed=True)
 
     await reply_safe(
         message, f"Scheduled to feed your cat {choice} times per day:\n" f"{', '.join(schedule)}"
@@ -82,9 +71,49 @@ async def setup_schedule(message: Message, state: FSMContext) -> None:
 
     # Send a test reminder right away
     await reply_safe(message, "Here's how the reminders will look:")
-    await send_reminder(
-        message.chat.id, reschedule_if_missed=False
-    )  # Test reminder shouldn't reschedule
+    await send_reminder(message.chat.id, reschedule_if_missed=False)
+
+
+def clear_user_schedule(chat_id: int) -> None:
+    """Clear all scheduled reminders for a user"""
+    scheduler = get_scheduler()
+    for job in scheduler.get_jobs():
+        if job.id.startswith(f"feed_{chat_id}"):
+            scheduler.remove_job(job.id)
+
+
+def schedule_reminder(
+    chat_id: int,
+    timestamp: datetime = None,
+    *,
+    hour: int = None,
+    minute: int = None,
+    reschedule_if_missed: bool = True,
+) -> None:
+    """Schedule a reminder - either one-time or recurring"""
+    scheduler = get_scheduler()
+
+    if timestamp:  # One-time reminder
+        job_id = f"followup_{chat_id}_{timestamp.strftime('%Y%m%d_%H%M')}"
+        scheduler.add_job(
+            send_reminder,
+            "date",
+            run_date=timestamp,
+            id=job_id,
+            args=[chat_id],
+            kwargs={"reschedule_if_missed": reschedule_if_missed},
+        )
+    else:  # Recurring reminder
+        job_id = f"feed_{chat_id}_{hour:02d}:{minute:02d}"
+        scheduler.add_job(
+            send_reminder,
+            "cron",
+            hour=hour,
+            minute=minute,
+            id=job_id,
+            args=[chat_id],
+            kwargs={"reschedule_if_missed": reschedule_if_missed},
+        )
 
 
 async def send_reminder(chat_id: int, reschedule_if_missed: bool = True) -> None:
@@ -117,13 +146,10 @@ async def send_reminder(chat_id: int, reschedule_if_missed: bool = True) -> None
     if response:
         await register_meal(response)
     else:
-        # notify user of the time out
-        # todo: fix the message as well
         reply_text = "Time's up!"
         if reschedule_if_missed:
             reply_text += " Will remind again in 1 hour."
-            register_reminder(chat_id, datetime.now() + timedelta(hours=1))
-
+            schedule_reminder(chat_id, timestamp=datetime.now() + timedelta(hours=1))
         await send_safe(chat_id, reply_text)
 
 
@@ -153,24 +179,6 @@ async def register_meal(message: Message) -> None:
 
     # todo: save timestamp
     # todo: send the photo to other responsible people
-
-
-def register_reminder(chat_id: int, timestamp: datetime) -> None:
-    """Schedule a follow-up reminder"""
-    scheduler = get_scheduler()
-
-    # Create a unique job ID for this follow-up reminder
-    job_id = f"followup_{chat_id}_{timestamp.strftime('%Y%m%d_%H%M')}"
-
-    # Add one-time job for the follow-up reminder
-    scheduler.add_job(
-        send_reminder,
-        "date",  # Run once at specific time
-        run_date=timestamp,
-        id=job_id,
-        args=[chat_id],
-        kwargs={"reschedule_if_missed": True},  # Allow rescheduling for follow-ups
-    )
 
 
 @add_command("help", "Show available commands")

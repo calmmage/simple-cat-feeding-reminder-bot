@@ -13,7 +13,7 @@
 # version 1: slightly better
 - [x] extend the user setup flow to ask the user when the reminders should be
 - [x] extend the reminder functionality to actually wait for user response!
-- [ ] Send a sample reminder right away!
+- [x] Send a sample reminder right away!
 - [ ] Find some easy way to specify and support time zones
 - [ ] Find a simple way to deploy the bot
   - [ ] Dockerfile
