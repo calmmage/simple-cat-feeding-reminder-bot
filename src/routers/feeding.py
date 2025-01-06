@@ -65,7 +65,7 @@ async def send_reminder(
     )
 
     if response is not None:
-        await register_meal(response, log_reminder=log_reminder)
+        await register_meal(response, state=state, log_reminder=log_reminder)
     else:
 
         from src.routers.schedule import schedule_reminder

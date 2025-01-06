@@ -14,6 +14,7 @@ from src.routers.info import router as info_router
 from src.routers.schedule import router as schedule_router
 from src.routers.settings import router as settings_router
 from src.routers.start import router as start_router
+from src.startup_tasks import reload_schedules
 
 # from src.routers.partners import router as partners_router
 
@@ -38,6 +39,11 @@ async def main() -> None:
     # Log server timezone on startup
     # Initialize Bot instance with a default parse mode
     bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+
+    # Add startup handler
+    @dp.startup()
+    async def on_startup() -> None:
+        await reload_schedules()
 
     # Initialize BotManager with default components
     bm = BotManager(

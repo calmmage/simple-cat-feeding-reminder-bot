@@ -1,6 +1,6 @@
 - [x] ask for a picture and recognize it!
 
-- [ ] reload schedules from db on bot restart 
+- [x] reload schedules from db on bot restart 
 - [ ] add num_retries to the ... reminders
 
 - [ ] add new settings menu to config stuff
