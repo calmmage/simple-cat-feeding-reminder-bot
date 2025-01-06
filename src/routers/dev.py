@@ -5,7 +5,7 @@ import requests
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
-from botspot.components.bot_commands_menu import add_command, add_hidden_command
+from botspot.components.bot_commands_menu import add_hidden_command
 from botspot.utils import reply_safe
 from botspot.utils.deps_getters import get_database
 

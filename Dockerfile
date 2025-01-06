@@ -9,7 +9,11 @@ FROM python:3.12-slim-bookworm
 WORKDIR /app
 
 # Copy the current directory contents into the container at /app
-COPY . /app
+COPY ./src /app/src
+COPY ./pyproject.toml /app/pyproject.toml
+COPY ./run.py /app/run.py
+COPY ./README.md /app/README.md
+COPY ./LICENSE /app/LICENSE
 
 # Install poetry and dependencies
 RUN pip install poetry

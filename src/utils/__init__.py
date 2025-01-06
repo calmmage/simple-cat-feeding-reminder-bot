@@ -1,17 +1,8 @@
-import re
 import sys
-from datetime import datetime, timedelta
-from distutils.util import strtobool
-from functools import lru_cache
-from os import getenv
 from pathlib import Path
-from typing import Optional, Tuple
-from zoneinfo import ZoneInfo
 
-import requests
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
-from loguru import logger
 
 # from aiogram.fsm.storage.redis import RedisStorage  # Optional, if using Redis
 
