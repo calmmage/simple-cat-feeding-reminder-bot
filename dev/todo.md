@@ -15,14 +15,14 @@
 - [x] extend the reminder functionality to actually wait for user response!
 - [x] Send a sample reminder right away!
   - [x] exclude sample reminder from the stats
-- [ ] add a basic chat handler "This bot doesn't support casual chatting! Commands only: /start, /add_partner, /stats, /full_stats, /stop"
+- [x] add a basic chat handler "This bot doesn't support casual chatting! Commands only: /start, /add_partner, /stats, /full_stats, /stop"
 - [x] save users - user data
   - [x] dev command: see saved users - admin-only (do I have such feature in botspot?) Should be a simple filter though
 - [x] Find some easy way to specify and support time zones
-  - [ ] use time zone to schedule - check that. (log) 
-  - [ ] check tz is saved to user
-  - [ ] log true time - and in how many hours till the next reminder
-  - [ ] show time of day in schedule selector
+  - [x] use time zone to schedule - check that. (log) 
+  - [x] check tz is saved to user
+  - [x] log true time - and in how many hours till the next reminder
+  - [x] show times of day in schedule selector
   - [ ] if timezone is missing - run the timezone setup flow, not fallback to default
 - [ ] on startup - load and activate user schedules
 - [ ] Find a simple way to deploy the bot
@@ -33,7 +33,7 @@
   - [ ] cancel the reminder if other partner has already fed
   - [ ] create reminders for partner as well
   - [ ] on startup - load and activate partner schedules
-- [ ] log feedings and add /stats and /full_stats commands
+- [x] log feedings and add /stats and /full_stats commands
   - [ ] bonus: random job (end of week?) for weekly summary
   - [ ] bonus: admin-only command to see all usage
   - [ ] /stop command

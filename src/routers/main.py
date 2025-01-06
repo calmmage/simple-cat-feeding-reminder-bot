@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from aiogram import Router, html
+from aiogram import F, Router, html
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
@@ -66,9 +66,9 @@ async def command_start_handler(message: Message, state: FSMContext) -> None:
 @router.message(Command("setup"))
 async def setup_schedule(message: Message, state: FSMContext) -> None:
     """Setup feeding schedule"""
-    choice = await ask_user_choice(
-        message.chat.id, "Pick a schedule", list(SCHEDULES.keys()) + ["Cancel"], state, timeout=None
-    )
+    choices = {k: f"{k} - {v}" for k, v in SCHEDULES.items()}
+    choices["Cancel"] = "Cancel"
+    choice = await ask_user_choice(message.chat.id, "Pick a schedule", choices, state, timeout=None)
 
     if choice is None or choice == "Cancel":
         return
@@ -256,6 +256,8 @@ async def send_reminder(
         await send_safe(chat_id, reply_text)
 
 
+@add_command("fed", "Register a feeding")
+@router.message(Command("fed"))
 async def register_meal(message: Message, log_reminder: bool = True) -> None:
     """Register a feeding"""
     # Get user's current schedule
@@ -392,3 +394,21 @@ async def setup_timezone(message: Message) -> None:
             f"Your current time should be around {user_time.strftime('%H:%M')}",
         )
         return
+
+
+@router.message(F.chat.type == "private")
+async def handle_messages(message: Message) -> None:
+    """Handle non-command messages"""
+    # if message.chat.type == "private":
+    await reply_safe(
+        message,
+        "This bot doesn't support casual chatting!\n\n"
+        "Available commands:\n"
+        "/start - Start the bot\n"
+        "/setup - Setup feeding schedule\n"
+        "/timezone - Set your timezone\n"
+        "/fed - Register a feeding\n"
+        "/stats - Show stats"
+        "/full_stats - Show full stats"
+        "/help - Show all commands",
+    )

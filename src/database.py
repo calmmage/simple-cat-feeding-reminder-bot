@@ -39,8 +39,10 @@ class DatabaseManager:
     def db(self) -> AsyncIOMotorDatabase:
         return get_database()
 
-    async def get_user(self, user_id: int) -> Optional[Dict[str, Any]]:
+    # todo: return User model here...
+    async def get_user(self, user_id: int) -> Optional[User]:
         """Get user by ID"""
+        data = await self.db.users.find_one({"user_id": user_id})
         return await self.db.users.find_one({"user_id": user_id})
 
     async def create_or_update_user(self, message: Message) -> Dict[str, Any]:
@@ -123,6 +125,7 @@ class DatabaseManager:
         result = await self.db.feedings.insert_one(feeding_data)
         return await self.db.feedings.find_one({"_id": result.inserted_id})
 
+    # todo: return Feeding model here...
     async def get_user_feedings(
         self,
         user_id: int,

@@ -104,3 +104,16 @@ def get_true_utc_time() -> datetime:
     ts = datetime.now() - server_offset
     ts = ts.replace(tzinfo=ZoneInfo("UTC"))
     return ts
+
+
+def get_timezone_obj(timezone_str: str):
+
+    from datetime import timedelta, timezone
+
+    offset = parse_timezone_offset(timezone_str)
+    if offset is None:
+        logger.warning(f"Invalid timezone format: {timezone_str}, using original time")
+        return ZoneInfo("UTC")
+
+    hours, minutes = offset
+    return timezone(timedelta(hours=hours, minutes=minutes), timezone_str)
