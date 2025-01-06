@@ -19,6 +19,8 @@ router = Router()
 async def db_write(message: Message) -> None:
     """Write test feeding record to database"""
     db = get_database()
+    assert message.from_user is not None
+    # todo: use db_manager and data models
     await db.feedings.insert_one(
         {
             "user_id": message.from_user.id,
@@ -35,6 +37,8 @@ async def db_write(message: Message) -> None:
 async def db_read(message: Message) -> None:
     """Read feeding records from database"""
     db = get_database()
+    assert message.from_user is not None
+    # todo: use db_manager and data models
     cursor = db.feedings.find({"user_id": message.from_user.id})
     items = await cursor.to_list(length=100)
     if not items:
@@ -56,8 +60,10 @@ async def db_read(message: Message) -> None:
 @router.message(Command("checktz"))
 async def check_timezone(message: Message) -> None:
     """Debug timezone calculations"""
-    # Get user's timezone
-    user = await db_manager.get_user(message.from_user.id)
+    # todo: use db_manager and data models
+    assert message.from_user is not None
+    db = get_database()
+    user = await db.users.find_one({"user_id": message.from_user.id})
     timezone = user.get("timezone") if user else None
 
     if not timezone:
@@ -66,7 +72,7 @@ async def check_timezone(message: Message) -> None:
 
     true_utc = get_true_utc_time()
     system_utc = datetime.now(ZoneInfo("UTC"))
-    user_time = get_user_local_time(timezone, base_time=true_utc)
+    user_time = get_user_local_time(timezone)
 
     debug_info = (
         "Timezone Debug Info:\n"
@@ -75,19 +81,6 @@ async def check_timezone(message: Message) -> None:
         f"System UTC: {system_utc}\n"
         f"System offset: {true_utc - system_utc}\n"
         f"Your local time: {user_time}\n"
-        "\nTime Server Status:"
     )
-
-    # Check each time server
-    for url, parser in TIME_SERVERS:
-        try:
-            response = requests.get(url, timeout=5)
-            if response.status_code == 200:
-                server_time = parser(response)
-                debug_info += f"\n{url.split('://')[1].split('/')[0]}: {server_time}"
-            else:
-                debug_info += f"\n{url.split('://')[1].split('/')[0]}: Error {response.status_code}"
-        except Exception as e:
-            debug_info += f"\n{url.split('://')[1].split('/')[0]}: Failed ({str(e)})"
 
     await reply_safe(message, debug_info)

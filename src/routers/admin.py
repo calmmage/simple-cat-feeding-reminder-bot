@@ -17,6 +17,7 @@ admin_user_id = os.getenv("ADMIN_USER_ID")
 @add_admin_command("list_users", "List all users")
 @router.message(Command("list_users"))
 async def list_users(message: Message) -> None:
+    assert message.from_user is not None
     if message.from_user.id != int(os.getenv("ADMIN_USER_ID", 0)):
         await reply_safe(message, "You are not authorized to use this command.")
         return

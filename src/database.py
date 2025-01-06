@@ -40,14 +40,15 @@ class DatabaseManager:
         return get_database()
 
     # todo: return User model here...
-    async def get_user(self, user_id: int) -> Optional[User]:
+    async def get_user(self, user_id: int) -> Optional[Dict[str, Any]]:
         """Get user by ID"""
-        data = await self.db.users.find_one({"user_id": user_id})
+        # data = await self.db.users.find_one({"user_id": user_id})
         return await self.db.users.find_one({"user_id": user_id})
 
     async def create_or_update_user(self, message: Message) -> Dict[str, Any]:
         """Create or update user from message"""
         user = message.from_user
+        assert user is not None
         now = datetime.now()
 
         user_data = {
@@ -58,8 +59,7 @@ class DatabaseManager:
             "updated_at": now,
         }
 
-        # Try to update existing user
-        result = await self.db.users.update_one(
+        await self.db.users.update_one(
             {"user_id": user.id},
             {
                 "$set": user_data,
@@ -71,9 +71,6 @@ class DatabaseManager:
             },
             upsert=True,
         )
-
-        if result.upserted_id:  # New user was created
-            return await self.get_user(user.id)
 
         return await self.get_user(user.id)
 
