@@ -94,7 +94,7 @@ async def setup_schedule(message: Message, state: FSMContext) -> None:
 
     # Send a test reminder right away
     await answer_safe(message, "Here's how the reminders will look:")
-    await send_reminder(message.chat.id, reschedule_if_missed=False)
+    await send_reminder(message.chat.id, reschedule_if_missed=False, log_reminder=False)
 
 
 def clear_user_schedule(chat_id: int) -> None:
@@ -139,7 +139,9 @@ def schedule_reminder(
         )
 
 
-async def send_reminder(chat_id: int, reschedule_if_missed: bool = True) -> None:
+async def send_reminder(
+    chat_id: int, reschedule_if_missed: bool = True, log_reminder: bool = True
+) -> None:
     """Send feeding reminder"""
     # todo: cancel if recently fed (And notify the user)
     # todo: provide both 'ask user' and 'choice' here (button to click + respond by message)
@@ -166,7 +168,7 @@ async def send_reminder(chat_id: int, reschedule_if_missed: bool = True) -> None
     )
 
     if response is not None:
-        await register_meal(response)
+        await register_meal(response, log_reminder=log_reminder)
     else:
         reply_text = "Time's up!"
         if reschedule_if_missed:
@@ -175,7 +177,7 @@ async def send_reminder(chat_id: int, reschedule_if_missed: bool = True) -> None
         await send_safe(chat_id, reply_text)
 
 
-async def register_meal(message: Message) -> None:
+async def register_meal(message: Message, log_reminder: bool = True) -> None:
     """Register a feeding"""
     # Get user's current schedule
     assert message.from_user is not None
@@ -199,12 +201,13 @@ async def register_meal(message: Message) -> None:
     # Log the feeding - save timestamp
     photo_id = message.photo[-1].file_id if message.photo else None
     video_id = message.video.file_id if message.video else None
-    feeding = await db_manager.log_feeding(
-        user_id=message.from_user.id,
-        schedule_type=schedule_type,
-        photo_id=photo_id,
-        video_id=video_id,
-    )
+    if log_reminder:
+        feeding = await db_manager.log_feeding(
+            user_id=message.from_user.id,
+            schedule_type=schedule_type,
+            photo_id=photo_id,
+            video_id=video_id,
+        )
 
     await reply_safe(message, reply_text)
     # bonus: track last fed time (per user) and if recently - cancel the next reminder

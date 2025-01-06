@@ -14,17 +14,24 @@
 - [x] extend the user setup flow to ask the user when the reminders should be
 - [x] extend the reminder functionality to actually wait for user response!
 - [x] Send a sample reminder right away!
-- [ ] save users - user data
-  - [ ] dev command: see saved users - admin-only (do I have such feature in botspot?) Should be a simple filter thoug
+  - [x] exclude sample reminder from the stats
+- [ ] add a basic chat handler "This bot doesn't support casual chatting! Commands only: /start, /add_partner, /stats, /full_stats, /stop"
+- [x] save users - user data
+  - [x] dev command: see saved users - admin-only (do I have such feature in botspot?) Should be a simple filter though
 - [ ] Find some easy way to specify and support time zones
+  - [ ] use time zone to schedule
+- [ ] on startup - load and activate user schedules
 - [ ] Find a simple way to deploy the bot
   - [ ] Dockerfile
   - [ ] Docker compose
   - [ ] ...
 - [ ] simple way to add partner
   - [ ] cancel the reminder if other partner has already fed
+  - [ ] create reminders for partner as well
+  - [ ] on startup - load and activate partner schedules
 - [ ] log feedings and add /stats and /full_stats commands
   - [ ] bonus: random job (end of week?) for weekly summary
+  - [ ] bonus: admin-only command to see all usage
   - [ ] /stop command
 
 Next steps
