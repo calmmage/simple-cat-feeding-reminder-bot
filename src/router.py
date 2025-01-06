@@ -10,10 +10,12 @@ from botspot.components import ask_user
 from botspot.components.ask_user_handler import ask_user_choice
 from botspot.components.bot_commands_menu import add_command
 from botspot.utils import reply_safe, send_safe
-from botspot.utils.deps_getters import get_scheduler
+from botspot.utils.deps_getters import get_database, get_scheduler
 from src.utils import create_state, repo_root
 
 router = Router()
+# Get database connection at module level
+
 # plan: dev/todo.md
 
 SCHEDULES = {
@@ -160,3 +162,66 @@ async def register_meal(message: Message) -> None:
 
 def register_reminder(user_id, timestamp) -> None:
     pass
+
+
+@add_command("dbwrite", "Write test feeding record", hidden=True)
+@router.message(Command("dbwrite"))
+async def db_write(message: Message) -> None:
+    """Write test feeding record to database"""
+    db = get_database()
+    await db.feedings.insert_one(
+        {
+            "user_id": message.from_user.id,
+            "timestamp": datetime.now(),
+            "schedule_type": "test",
+            "photo_id": None,
+        }
+    )
+    await reply_safe(message, "Test feeding record written to database!")
+
+
+@add_command("dbread", "Read feeding records", hidden=True)
+@router.message(Command("dbread"))
+async def db_read(message: Message) -> None:
+    """Read feeding records from database"""
+    db = get_database()
+    cursor = db.feedings.find({"user_id": message.from_user.id})
+    items = await cursor.to_list(length=100)
+    if not items:
+        await reply_safe(message, "No feeding records found!")
+        return
+
+    text = "Your feeding records:\n\n"
+    for item in items:
+        text += f"Time: {item['timestamp'].strftime('%Y-%m-%d %H:%M')}\n"
+        text += f"Schedule: {item['schedule_type']}\n"
+        if item.get("photo_id"):
+            text += "📸 With photo\n"
+        text += "\n"
+
+    await reply_safe(message, text)
+
+
+@add_command("help", "Show available commands")
+@router.message(Command("help"))
+async def help_command(message: Message) -> None:
+    """Show help message with available commands"""
+    from botspot.components.bot_commands_menu import commands
+
+    # Main commands section
+    text = "🐱 <b>Cat Feeding Bot Commands</b>\n\n"
+    text += "<b>Main Commands:</b>\n"
+    for cmd, info in commands.items():
+        if not info.hidden:
+            text += f"/{cmd} - {info.description}\n"
+
+    # Add hidden commands section for admin
+    # Get bot info to check if user is owner
+    # bot_info = await message.bot.get_me()
+    # if message.from_user.id == bot_info.id:  # Only show to bot owner
+    text += "\n<b>Hidden Commands:</b>\n"
+    for cmd, info in commands.items():
+        if info.hidden:
+            text += f"/{cmd} - {info.description}\n"
+
+    await reply_safe(message, text)

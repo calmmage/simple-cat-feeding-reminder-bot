@@ -15,6 +15,10 @@
 - [x] extend the reminder functionality to actually wait for user response!
 - [ ] Send a sample reminder right away!
 - [ ] Find some easy way to specify and support time zones
+- [ ] Find a simple way to deploy the bot
+  - [ ] Dockerfile
+  - [ ] Docker compose
+  - [ ] ...
 
 Next steps
 - [ ] reset_reminders command
