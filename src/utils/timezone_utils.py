@@ -1,16 +1,30 @@
 import re
 from datetime import datetime, timedelta
-from distutils.util import strtobool
 from functools import lru_cache
-from os import getenv
-from pathlib import Path
 from typing import Optional, Tuple
 from zoneinfo import ZoneInfo
 
-import requests
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.storage.base import StorageKey
 from loguru import logger
+
+
+@lru_cache(maxsize=1)
+def get_server_offset() -> timedelta:
+    """Get the offset between server's local time and UTC (cached for 1 hour)"""
+    now = datetime.now()
+    now_utc = datetime.now(ZoneInfo("UTC")).replace(tzinfo=None)
+    offset = now - now_utc
+    logger.debug(
+        f"Server timezone offset calculated:\n"
+        f"Server time: {now}\n"
+        f"UTC time: {now_utc}\n"
+        f"Offset: {offset}"
+    )
+    return offset
+
+
+def clear_server_offset_cache() -> None:
+    """Clear the server offset cache (call this during DST changes)"""
+    get_server_offset.cache_clear()
 
 
 def parse_timezone_offset(timezone_str: str) -> Optional[Tuple[int, int]]:
@@ -23,166 +37,70 @@ def parse_timezone_offset(timezone_str: str) -> Optional[Tuple[int, int]]:
     match = re.match(pattern, timezone_str.upper().strip())
 
     if not match:
+        logger.warning(f"Failed to parse timezone string: {timezone_str}")
         return None
 
     hours = int(match.group("hours"))
     minutes = int(match.group("minutes") or "0")
     sign = 1 if match.group("sign") == "+" else -1
 
-    # Validate hours and minutes
-    if hours > 14 or minutes >= 60:  # UTC-12 to UTC+14 are valid
-        return None
-
+    logger.debug(f"Parsed timezone {timezone_str} -> {sign * hours:+d}:{abs(minutes):02d}")
     return (sign * hours, sign * minutes)
 
 
-def get_server_timezone() -> str:
-    """Get server timezone in GMT±HH:MM format"""
-    # Check for environment variable override
-    env_timezone = getenv("SERVER_TIMEZONE")
-    if env_timezone and parse_timezone_offset(env_timezone):
-        return env_timezone.upper()
+def convert_time_to_gmt(hour: int, minute: int, timezone_str: str) -> Tuple[int, int]:
+    """Convert hour:minute from given timezone to GMT hour:minute"""
+    offset = parse_timezone_offset(timezone_str)
+    if offset is None:
+        logger.warning(f"Invalid timezone format: {timezone_str}, using original time")
+        return hour, minute
 
-    try:
-        # Get local timezone name
-        local_tz = datetime.now().astimezone().tzinfo
+    offset_hours, offset_minutes = offset
+    # Convert to total minutes for easier calculation
+    # Subtract both server offset and user's timezone offset
+    total_minutes = (
+        hour * 60
+        + minute
+        - (offset_hours * 60 + offset_minutes)  # User's timezone offset
+        # - (server_hours * 60 + server_minutes)  # Server's timezone offset
+    )
 
-        # Convert current time to UTC
-        now_local = datetime.now(local_tz)
-        now_utc = now_local.astimezone(ZoneInfo("UTC"))
+    # Handle day wrap-around
+    while total_minutes < 0:
+        total_minutes += 24 * 60
+    total_minutes %= 24 * 60
 
-        # Calculate offset
-        offset = now_local.utcoffset()
-        if offset is None:
-            logger.warning("Could not determine server timezone offset, falling back to UTC")
-            return "GMT+00:00"
+    gmt_hour = total_minutes // 60
+    gmt_minute = total_minutes % 60
 
-        hours = int(offset.total_seconds() // 3600)
-        minutes = int((offset.total_seconds() % 3600) // 60)
+    logger.debug(
+        f"Converting {hour:02d}:{minute:02d} {timezone_str} to GMT:\n"
+        f"User offset: {offset_hours:+d}:{abs(offset_minutes):02d}\n"
+        # f"Server offset: {server_hours:+d}:{abs(server_minutes):02d}\n"
+        f"Result: {gmt_hour:02d}:{gmt_minute:02d} GMT"
+    )
 
-        return f"GMT{'+' if hours >= 0 else ''}{hours:02d}:{abs(minutes):02d}"
-    except Exception as e:
-        logger.warning(f"Error determining server timezone: {e}, falling back to UTC")
-        return "GMT+00:00"
-
-
-TIME_SERVERS = [
-    (
-        "http://worldtimeapi.org/api/timezone/UTC",
-        lambda r: datetime.fromisoformat(r.json()["datetime"].replace("Z", "+00:00")),
-    ),
-    (
-        "https://www.time.gov/actualtime.cgi",
-        lambda r: datetime.fromtimestamp(int(r.text.split('"')[1]) / 1000.0, ZoneInfo("UTC")),
-    ),
-    (
-        "http://showcase.api.linx.twenty57.net/UnixTime/ticks",
-        lambda r: datetime.fromtimestamp(
-            int(r.json()["Ticks"]) / 10000000 - 62135596800, ZoneInfo("UTC")
-        ),
-    ),
-]
+    return gmt_hour, gmt_minute
 
 
-def get_true_utc_time() -> datetime:
-    """Get accurate UTC time from internet time servers"""
-    if strtobool(getenv("DISABLE_INTERNET_TIME", "false")):
-        system_time = datetime.now(ZoneInfo("UTC"))
-        logger.debug(f"Internet time disabled, using system time: {system_time}")
-        return system_time
-
-    for url, parser in TIME_SERVERS:
-        try:
-            response = requests.get(url, timeout=5)
-            if response.status_code == 200:
-                true_time = parser(response)
-                system_time = datetime.now(ZoneInfo("UTC"))
-                offset = true_time - system_time
-                logger.debug(
-                    f"Time from {url}:"
-                    f"\nTrue time: {true_time}"
-                    f"\nSystem time: {system_time}"
-                    f"\nOffset: {offset}"
-                )
-                return true_time
-        except Exception as e:
-            logger.debug(f"Failed to get time from {url}: {e}")
-            continue
-
-    logger.warning("All time servers failed, falling back to system time")
-    return datetime.now(ZoneInfo("UTC"))
-
-
-def get_user_local_time(timezone_str: str, base_time: Optional[datetime] = None) -> datetime:
-    """Convert UTC time to user's local time"""
-    if base_time is None:
-        base_time = get_true_utc_time()
+def get_user_local_time(timezone_str: str) -> datetime:
+    """Convert GMT time to user's local time for display purposes"""
+    base_time = datetime.now(tz=ZoneInfo("UTC"))
 
     offset = parse_timezone_offset(timezone_str)
     if offset is None:
-        logger.warning(f"Invalid timezone format: {timezone_str}, using UTC")
+        logger.warning(f"Invalid timezone format: {timezone_str}, using original time")
         return base_time
 
     hours, minutes = offset
-    local_time = base_time + timedelta(hours=hours, minutes=minutes)
 
-    logger.debug(
-        f"Converting to local time:"
-        f"\nBase UTC time: {base_time}"
-        f"\nTimezone: {timezone_str}"
-        f"\nOffset: {hours:+d}:{abs(minutes):02d}"
-        f"\nLocal time: {local_time}"
-    )
-
-    return local_time
+    # First convert from server time to user's timezone
+    return base_time + timedelta(hours=hours, minutes=minutes)
 
 
-def get_utc_time(local_time: datetime, timezone_str: str) -> datetime:
-    """Convert user's local time to UTC using true UTC time as reference"""
-    offset = parse_timezone_offset(timezone_str)
-    if offset is None:
-        logger.warning(f"Invalid timezone format: {timezone_str}, using UTC")
-        return local_time
-
-    # Get current true UTC time for reference
-    true_utc = get_true_utc_time()
-    system_utc = datetime.now(ZoneInfo("UTC"))
-
-    # Calculate system clock offset from true UTC
-    system_offset = true_utc - system_utc
-
-    hours, minutes = offset
-    utc_time = local_time - timedelta(hours=hours, minutes=minutes) + system_offset
-
-    logger.debug(
-        f"Converting to UTC:"
-        f"\nLocal time: {local_time}"
-        f"\nTimezone: {timezone_str}"
-        f"\nOffset: {hours:+d}:{abs(minutes):02d}"
-        f"\nSystem offset: {system_offset}"
-        f"\nUTC time: {utc_time}"
-    )
-
-    return utc_time
-
-
-def get_current_utc_time() -> datetime:
-    """Get current UTC time, using cached offset from true time"""
-    true_utc, system_utc = _cached_true_utc_time()
-
-    # If cache is too old, refresh it
-    if (datetime.now(ZoneInfo("UTC")) - system_utc) > timedelta(seconds=UTC_CACHE_DURATION):
-        _cached_true_utc_time.cache_clear()
-        true_utc, system_utc = _cached_true_utc_time()
-
-    # Calculate current true time using cached offset
-    system_offset = true_utc - system_utc
-    return datetime.now(ZoneInfo("UTC")) + system_offset
-
-
-@lru_cache(maxsize=1)
-def _cached_true_utc_time() -> tuple[datetime, datetime]:
-    """Get and cache true UTC time along with system time"""
-    true_utc = get_true_utc_time()
-    system_utc = datetime.now(ZoneInfo("UTC"))
-    return true_utc, system_utc
+def get_true_utc_time() -> datetime:
+    """Get current UTC time (for display purposes only)"""
+    server_offset = get_server_offset()
+    ts = datetime.now() - server_offset
+    ts = ts.replace(tzinfo=ZoneInfo("UTC"))
+    return ts

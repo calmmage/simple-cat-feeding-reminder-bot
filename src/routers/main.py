@@ -17,12 +17,7 @@ from loguru import logger
 
 from src.database import DatabaseManager
 from src.utils import create_state, repo_root
-from src.utils.timezone_utils import (
-    get_true_utc_time,
-    get_user_local_time,
-    get_utc_time,
-    parse_timezone_offset,
-)
+from src.utils.timezone_utils import convert_time_to_gmt, get_user_local_time, parse_timezone_offset
 
 router = Router()
 
@@ -92,48 +87,50 @@ async def setup_schedule(message: Message, state: FSMContext) -> None:
     user = await db_manager.get_user(message.from_user.id)
     timezone = user.get("timezone") if user else None
 
+    # Log schedule setup
+    logger.debug(
+        f"Setting up schedule:\n"
+        f"User: {message.from_user.id}\n"
+        f"Schedule type: {choice}\n"
+        f"Times (local): {', '.join(schedule)}\n"
+        f"Timezone: {timezone or 'UTC'}"
+    )
+
     # Clear existing jobs
     clear_user_schedule(message.chat.id)
 
     # Add new jobs
+    local_times = []
     for time in schedule:
         hour, minute = map(int, time.split(":"))
+        local_times.append(f"{hour:02d}:{minute:02d}")
 
-        # Convert local time to UTC for scheduling if timezone is set
-        if timezone:
-            local_time = datetime.now().replace(hour=hour, minute=minute, second=0, microsecond=0)
-            utc_time = get_utc_time(local_time, timezone)
-            hour, minute = utc_time.hour, utc_time.minute
-
-        schedule_reminder(
+        # No need to convert time - let the scheduler handle it
+        await schedule_reminder(
             chat_id=message.chat.id,
-            hour=hour,
+            hour=hour,  # Pass local time
             minute=minute,
             reschedule_if_missed=True,
             timezone=timezone,
         )
 
-    # Show schedule in user's timezone
-    if timezone:
-        schedule_times = []
-        for time in schedule:
-            h, m = map(int, time.split(":"))
-            local_time = datetime.now().replace(hour=h, minute=m)
-            utc_time = get_utc_time(local_time, timezone)
-            schedule_times.append(utc_time.strftime("%H:%M"))
+    # Log the final schedule
+    logger.debug(
+        f"Schedule setup complete:\n"
+        f"User: {message.from_user.id}\n"
+        f"Schedule type: {choice}\n"
+        f"Local times: {', '.join(local_times)}\n"
+        f"Timezone: {timezone or 'UTC'}"
+    )
 
-        await reply_safe(
-            message,
-            f"Scheduled to feed your cat {choice} times per day (in your timezone {timezone}):\n"
-            f"{', '.join(schedule_times)}",
-        )
-    else:
-        await reply_safe(
-            message,
-            f"Scheduled to feed your cat {choice} times per day:\n"
-            f"{', '.join(schedule)}\n\n"
-            "Note: Times are in UTC. Use /timezone to set your timezone.",
-        )
+    # Show schedule to user
+    await reply_safe(
+        message,
+        f"Scheduled to feed your cat {choice} times per day"
+        f"{f' (in your timezone {timezone})' if timezone else ''}:\n"
+        f"{', '.join(local_times)}"
+        f"{'' if timezone else '\n\nNote: Times are in UTC. Use /timezone to set your timezone.'}",
+    )
 
     # Send a test reminder right away
     await reply_safe(message, "Here's how the reminders will look:")
@@ -148,7 +145,7 @@ def clear_user_schedule(chat_id: int) -> None:
             scheduler.remove_job(job.id)
 
 
-def schedule_reminder(
+async def schedule_reminder(
     chat_id: int,
     timestamp: Optional[datetime] = None,
     *,
@@ -157,12 +154,15 @@ def schedule_reminder(
     reschedule_if_missed: bool = True,
     timezone: Optional[str] = None,
 ) -> None:
-    """Schedule a reminder - either one-time or recurring"""
+    """Schedule a reminder"""
     scheduler = get_scheduler()
 
     if timestamp is not None:  # One-time reminder
-        if timezone:
-            timestamp = get_utc_time(timestamp, timezone)
+        logger.debug(
+            f"Scheduling one-time reminder:\n"
+            f"GMT time: {timestamp}\n"
+            f"Time until reminder: {timestamp - datetime.now()}"
+        )
 
         job_id = f"followup_{chat_id}_{timestamp.strftime('%Y%m%d_%H%M')}"
         scheduler.add_job(
@@ -173,23 +173,55 @@ def schedule_reminder(
             args=[chat_id],
             kwargs={"reschedule_if_missed": reschedule_if_missed},
         )
-    else:  # Recurring reminder
+    elif hour is not None and minute is not None:  # Recurring reminder
+        if not timezone:
+            raise ValueError("Timezone is required for recurring reminders")
+
+        # Convert to GMT hours
+        gmt_hour, gmt_minute = convert_time_to_gmt(hour, minute, timezone)
+
+        logger.debug(
+            f"Scheduling recurring reminder:\n"
+            f"Local time: {hour:02d}:{minute:02d}\n"
+            f"User timezone: {timezone}\n"
+            f"GMT time: {gmt_hour:02d}:{gmt_minute:02d}"
+        )
+
         job_id = f"feed_{chat_id}_{hour:02d}:{minute:02d}"
         scheduler.add_job(
             send_reminder,
             "cron",
-            hour=hour,
-            minute=minute,
+            hour=gmt_hour,
+            minute=gmt_minute,
             id=job_id,
             args=[chat_id],
             kwargs={"reschedule_if_missed": reschedule_if_missed},
         )
+    else:
+        raise ValueError("Either timestamp or hour and minute must be provided")
 
 
 async def send_reminder(
     chat_id: int, reschedule_if_missed: bool = True, log_reminder: bool = True
 ) -> None:
     """Send feeding reminder"""
+    # Get user's timezone for logging
+    user = await db_manager.get_user(chat_id)
+    timezone = user.get("timezone") if user else None
+
+    now = datetime.now(ZoneInfo("UTC"))
+    if timezone:
+        local_time = get_user_local_time(timezone)
+        logger.debug(
+            f"Sending reminder:"
+            f"\nUser: {chat_id}"
+            f"\nUTC time: {now}"
+            f"\nUser timezone: {timezone}"
+            f"\nUser local time: {local_time}"
+        )
+    else:
+        logger.debug(f"Sending reminder (no timezone):" f"\nUser: {chat_id}" f"\nUTC time: {now}")
+
     # todo: cancel if recently fed (And notify the user)
     # todo: provide both 'ask user' and 'choice' here (button to click + respond by message)
     # await send_safe(
@@ -220,7 +252,7 @@ async def send_reminder(
         reply_text = "Time's up!"
         if reschedule_if_missed:
             reply_text += " Will remind again in 1 hour."
-            schedule_reminder(chat_id, timestamp=datetime.now() + timedelta(hours=1))
+            await schedule_reminder(chat_id, timestamp=datetime.now() + timedelta(hours=1))
         await send_safe(chat_id, reply_text)
 
 
@@ -282,10 +314,10 @@ async def help_command(message: Message) -> None:
         if info.visibility == Visibility.PUBLIC:
             text += f"/{cmd} - {info.description}\n"
 
+    assert message.from_user is not None
+
     # Add hidden commands section for admin
     # Get bot info to check if user is owner
-    # bot_info = await message.bot.get_me()
-    # if message.from_user.id == bot_info.id:  # Only show to bot owner
     text += "\n<b>Hidden Commands:</b>\n"
     for cmd, info in commands.items():
         if info.visibility == Visibility.HIDDEN:
@@ -344,18 +376,14 @@ async def setup_timezone(message: Message) -> None:
         await db_manager.update_user_timezone(message.from_user.id, formatted_timezone)
 
         # Get current time in user's timezone
-        true_utc = get_true_utc_time()
-        user_time = get_user_local_time(formatted_timezone, base_time=true_utc)
-        system_utc = datetime.now(ZoneInfo("UTC"))
+        user_time = get_user_local_time(formatted_timezone)
+        system_utc = datetime.now(tz=ZoneInfo("UTC"))
 
         logger.debug(
             "Timezone setup:\n"
-            f"True UTC time: {true_utc}\n"
             f"System UTC time: {system_utc}\n"
-            f"System offset: {true_utc - system_utc}\n"
             f"User timezone: {formatted_timezone}\n"
             f"Calculated user time: {user_time}\n"
-            f"Offset from UTC: {hours:+d}:{abs(minutes):02d}"
         )
 
         await reply_safe(

@@ -9,5 +9,10 @@ from src.utils import setup_logger
 load_dotenv()
 
 if __name__ == "__main__":
-    setup_logger(logger)
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser()
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    args = parser.parse_args()
+    setup_logger(logger, level="DEBUG" if args.debug else "INFO")
     asyncio.run(main())

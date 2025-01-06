@@ -15,7 +15,7 @@ from loguru import logger
 
 # from aiogram.fsm.storage.redis import RedisStorage  # Optional, if using Redis
 
-repo_root = Path(__file__).parent.parent
+repo_root = Path(__file__).parent.parent.parent
 
 
 def create_state(chat_id: int) -> FSMContext:
