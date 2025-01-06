@@ -9,7 +9,8 @@ from dotenv import load_dotenv
 from src.routers.admin import router as admin_router
 from src.routers.dev import router as dev_router
 from src.routers.main import router as main_router
-from src.routers.partners import router as partners_router
+
+# from src.routers.partners import router as partners_router
 from src.routers.stats import router as stats_router
 
 load_dotenv()
@@ -20,7 +21,7 @@ if TOKEN is None or TOKEN == "":
 dp = Dispatcher()
 dp.include_router(dev_router)
 dp.include_router(admin_router)
-dp.include_router(partners_router)
+# dp.include_router(partners_router)
 dp.include_router(stats_router)
 dp.include_router(main_router)
 
