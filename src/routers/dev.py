@@ -1,16 +1,16 @@
+from datetime import datetime
+
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
-from datetime import datetime
-
-from botspot.components.bot_commands_menu import add_command
+from botspot.components.bot_commands_menu import add_hidden_command
 from botspot.utils import reply_safe
 from botspot.utils.deps_getters import get_database
 
 router = Router()
 
 
-@add_command("dbwrite", "Write test feeding record", hidden=True)
+@add_hidden_command("dbwrite", "Write test feeding record")
 @router.message(Command("dbwrite"))
 async def db_write(message: Message) -> None:
     """Write test feeding record to database"""
@@ -26,7 +26,7 @@ async def db_write(message: Message) -> None:
     await reply_safe(message, "Test feeding record written to database!")
 
 
-@add_command("dbread", "Read feeding records", hidden=True)
+@add_hidden_command("dbread", "Read feeding records")
 @router.message(Command("dbread"))
 async def db_read(message: Message) -> None:
     """Read feeding records from database"""

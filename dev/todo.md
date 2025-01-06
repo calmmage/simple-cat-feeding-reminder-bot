@@ -14,15 +14,22 @@
 - [x] extend the user setup flow to ask the user when the reminders should be
 - [x] extend the reminder functionality to actually wait for user response!
 - [x] Send a sample reminder right away!
+- [ ] save users - user data
+  - [ ] dev command: see saved users - admin-only (do I have such feature in botspot?) Should be a simple filter thoug
 - [ ] Find some easy way to specify and support time zones
 - [ ] Find a simple way to deploy the bot
   - [ ] Dockerfile
   - [ ] Docker compose
   - [ ] ...
+- [ ] simple way to add partner
+  - [ ] cancel the reminder if other partner has already fed
+- [ ] log feedings and add /stats and /full_stats commands
+  - [ ] bonus: random job (end of week?) for weekly summary
+  - [ ] /stop command
 
 Next steps
 - [ ] reset_reminders command
-- [ ] 'cancel' button for the schedule setup flow
+- [x] 'cancel' button for the schedule setup flow
 - [ ] setup timezone
   - [ ] location
   - [ ] string
