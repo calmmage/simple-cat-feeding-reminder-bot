@@ -25,7 +25,7 @@ async def setup_schedule(message: Message, state: FSMContext) -> None:
     choices["Cancel"] = "Cancel"
     choice = await ask_user_choice(message.chat.id, "Pick a schedule", choices, state, timeout=None)
 
-    if choice is None or choice == "Cancel":
+    if choice is None or choice == "Cancel" or choice not in SCHEDULES:
         return
 
     if choice == "Manual":
@@ -35,7 +35,10 @@ async def setup_schedule(message: Message, state: FSMContext) -> None:
     schedule = SCHEDULES[choice]
     assert message.from_user is not None
 
-    # Save schedule to database
+    # Clear existing schedule before setting up new one
+    clear_user_schedule(message.chat.id)
+
+    # Save new schedule to database
     await db_manager.save_user_schedule(message.from_user.id, choice, schedule)
 
     # Get user's timezone
@@ -50,9 +53,6 @@ async def setup_schedule(message: Message, state: FSMContext) -> None:
         f"Times (local): {', '.join(schedule)}\n"
         f"Timezone: {timezone or 'UTC'}"
     )
-
-    # Clear existing jobs
-    clear_user_schedule(message.chat.id)
 
     # Add new jobs
     local_times = []

@@ -12,7 +12,7 @@
   - if no -> ... ? retry, ... 
 - [x] if in chat message "GMT+..." regexp -> ... treat as timezone setter
 - [x] /stop command
-- [ ] bugfix issue when incorrect response to /start / /setup command
+- [x] bugfix issue when incorrect response to /start / /setup command
 - [ ] if /command -> always react correctly? Need to check my implementation of ask_user... (capture state)
 
 - [ ] well, add partner feature

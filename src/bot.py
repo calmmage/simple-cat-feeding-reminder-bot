@@ -24,26 +24,29 @@ if TOKEN is None or TOKEN == "":
     raise ValueError("TELEGRAM_BOT_TOKEN is not set")
 
 dp = Dispatcher()
-dp.include_router(dev_router)
-dp.include_router(admin_router)
+dp.include_routers(
+    dev_router,
+    admin_router,
+    info_router,
+    feeding_router,
+    schedule_router,
+    settings_router,
+    start_router,
+    chat_router,
+)
 # dp.include_router(partners_router)
-dp.include_router(info_router)
-dp.include_router(feeding_router)
-dp.include_router(schedule_router)
-dp.include_router(settings_router)
-dp.include_router(start_router)
-dp.include_router(chat_router)
+
+
+# Add startup handler
+@dp.startup()
+async def on_startup() -> None:
+    await reload_schedules()
 
 
 async def main() -> None:
     # Log server timezone on startup
     # Initialize Bot instance with a default parse mode
     bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-
-    # Add startup handler
-    @dp.startup()
-    async def on_startup() -> None:
-        await reload_schedules()
 
     # Initialize BotManager with default components
     bm = BotManager(
