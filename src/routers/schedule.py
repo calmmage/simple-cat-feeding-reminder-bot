@@ -96,7 +96,10 @@ def clear_user_schedule(chat_id: int) -> None:
     """Clear all scheduled reminders for a user"""
     scheduler = get_scheduler()
     for job in scheduler.get_jobs():
-        if job.id.startswith(f"feed_{chat_id}"):
+        if f"_{chat_id}_" in job.id:
+            scheduler.remove_job(job.id)
+        elif chat_id in job.args or chat_id in job.kwargs.values():
+            logger.warning(f"Found job with chat_id in args or kwargs and not in id: {job.id}")
             scheduler.remove_job(job.id)
 
 
